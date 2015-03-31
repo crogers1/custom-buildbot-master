@@ -1,0 +1,75 @@
+diff --git a/buildbot/schedulers/forcesched.py b/buildbot/schedulers/forcesched.py
+index 6d2b005..13f02b2 100644
+--- a/buildbot/schedulers/forcesched.py
++++ b/buildbot/schedulers/forcesched.py
+@@ -645,11 +645,26 @@ class ForceScheduler(base.BaseScheduler):
+                                       kwargs=kwargs)
+ 
+         changeids = map(lambda a: isinstance(a, int) and a or a.number, changeids)
+-
++        layers = []
++        for i in range(int(kwargs['num_layers'][0])):
++            if (kwargs['layer'+str(i)][0] != '') and (kwargs['lrepo'+str(i)][0] != '') and (kwargs['lbranch'+str(i)][0] != ''):
++                layer_string = kwargs['layer'+str(i)][0]+':'+kwargs['lrepo'+str(i)][0]+':'+kwargs['lbranch'+str(i)][0]
++                layers.append(layer_string)
++        
++        properties['layers'] = ','.join(layers)
+         real_properties = Properties()
++        urldict = {}
++        repo_overrides = ""
+         for pname, pvalue in properties.items():
+             real_properties.setProperty(pname, pvalue, "Force Build Form")
+-
++            if ('url' in pname) and pvalue:
++                name = pname[0:pname.find('url')]
++                urldict[name] = (name,pvalue)
++        keys = urldict.keys()
++        for key in keys:
++            repo_overrides = repo_overrides+urldict[key][0] + ':' + urldict[key][1]+','
++        real_properties.setProperty('repos', repo_overrides, "Force Build Form")
++                
+         defer.returnValue((real_properties, changeids, sourcestamps))
+ 
+     @defer.inlineCallbacks
+diff --git a/buildbot/status/web/templates/forms.html b/buildbot/status/web/templates/forms.html
+index 5cf175a..b0b304c 100644
+--- a/buildbot/status/web/templates/forms.html
++++ b/buildbot/status/web/templates/forms.html
+@@ -173,6 +173,37 @@
+         push the 'Force Build' button</p>
+   {% endif %}
+   <input type='hidden' name='forcescheduler' value='{{sch.name}}' />
++    <script type='text/javascript' src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
++    <script>
++        $(document).ready(function() {
++            var x = 1;
++            var wrapper = $(".input_fields");
++            var add_button = $(".add_field_button");
++            var num_layers = $("#num_layers");
++
++            $(add_button).click(function(ele) {
++                ele.preventDefault();
++                $(wrapper).append('<div>Layer Name:<input type="text" name="layer'+x+'"/> Layer Repository:<input type="text" name="lrepo'+x+'"/>Layer Branch:<input type="text" name="lbranch'+x+'"/><a href="#" class="remove_field">Remove</a></div>');
++                x++;
++                $(num_layers).val(x);
++            });
++            $(wrapper).on("click",".remove_field", function(ele) {
++                ele.preventDefault(); $(this).parent('div').remove(); x--; $(num_layers).val(x);
++            })
++        });
++    </script>
++    <div class="input_fields">
++        <button class="add_field_button" type="button">Add More Layer fields</button>
++        <div><input type="hidden" id="num_layers" name="num_layers" value="1"></div>
++        <div>Layer Name:<input type="text" name="layer0"> Layer Repository:<input type="text" name="lrepo0">Layer Branch:<input type="text" name="lbranch0"></div>
++
++    </div>
++
++
++
++
++
++
+   {% for f in sch.all_fields %}
+     {{ force_build_scheduler_parameter(f, authz, request, sch, default_props) }}
+   {% endfor %}
